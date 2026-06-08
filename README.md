@@ -270,37 +270,6 @@ provider "awscc" {
 }
 ```
 
-The syntax differs between providers: `aws` uses an `assume_role` block, while
-`awscc` uses an `assume_role` object.
-
-## Terraform Deployer Permissions
-
-The IAM principal running Terraform needs permissions for the AWS provider
-resources created by this module: EC2 launch templates, IAM role/profile and
-policies, security groups, and optional KMS grants.
-
-Because PCS resources use `awscc`, the deployer also needs CloudFormation Cloud
-Control permissions. Without these permissions, cluster creation fails with
-`AccessDeniedException` for `cloudformation:CreateResource`.
-
-Minimum Cloud Control actions:
-
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "cloudformation:CreateResource",
-    "cloudformation:GetResource",
-    "cloudformation:GetResourceRequestStatus",
-    "cloudformation:ListResources",
-    "cloudformation:UpdateResource",
-    "cloudformation:DeleteResource",
-    "cloudformation:CancelResourceRequest"
-  ],
-  "Resource": "*"
-}
-```
-
 ## Inputs
 
 | Name | Description | Required | Default |
