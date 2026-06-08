@@ -1,110 +1,94 @@
-variable "cluster" {
-  description = "PCS cluster and nested queue/node-group definition."
+variable "cluster_name" {
+  description = "Name of the PCS cluster."
+  type        = string
+}
+
+variable "config" {
+  description = "PCS cluster configuration matching the project tfvars shape."
   type = object({
-    name                  = optional(string)
-    cluster_name          = optional(string)
-    scheduler_type        = optional(string, "SLURM")
-    scheduler_version     = optional(string)
-    pcs_scheduler_version = optional(string)
-    size                  = optional(string)
-    pcs_size              = optional(string)
-    login_node = optional(object({
-      enabled            = optional(bool, true)
-      name               = optional(string, "login")
-      instance_type      = string
-      launch_template    = optional(string, "login")
-      subnet_group       = optional(string, "public")
-      min_instance_count = optional(number, 1)
-      max_instance_count = optional(number, 1)
-    }))
-    login_node_instance_type = optional(string)
-    queues = optional(map(map(object({
+    template_efs_id                = optional(string, "")
+    template_lustre_id             = optional(string, "")
+    template_lustre_dns            = optional(string, "")
+    template_lustre_mount_point    = optional(string, "")
+    template_lustre_writable_paths = optional(set(string), [])
+
+    template_keypair_name     = optional(string)
+    template_image_id_compute = string
+    template_image_id_login   = string
+    template_image_id_dcv     = string
+
+    login_node_instance_type = string
+    pcs_scheduler_version    = string
+    pcs_size                 = string
+
+    cluster_setup = map(map(object({
       instance_type      = string
       min_instance_count = number
       max_instance_count = number
       launch_template    = optional(string, "compute")
-      subnet_group       = optional(string, "private")
-    }))), {})
-    cluster_setup = optional(map(map(object({
-      instance_type      = string
-      min_instance_count = number
-      max_instance_count = number
-      launch_template    = optional(string, "compute")
-      subnet_group       = optional(string, "private")
-    }))), {})
+    })))
   })
-}
-
-variable "amis" {
-  description = "AMI IDs keyed by launch-template type, for example compute, login, and dcv."
-  type        = map(string)
-}
-
-variable "bootstrap_scripts" {
-  description = "Bootstrap template content keyed like amis. Filesystem values are rendered into each template."
-  type        = map(string)
-}
-
-variable "filesystems" {
-  description = "Optional existing EFS and FSx for Lustre filesystems exposed to bootstrap templates."
-  type = object({
-    efs = optional(object({
-      id          = string
-      mount_point = optional(string, "/home")
-    }))
-    lustre = optional(object({
-      id             = optional(string)
-      dns_name       = string
-      mount_name     = string
-      mount_point    = optional(string, "/fsx")
-      writable_paths = optional(set(string), [])
-    }))
-  })
-  default = {}
 }
 
 variable "networking" {
-  description = "Existing networking used by the PCS cluster and its node groups."
+  description = "Existing VPC and subnets used by the PCS cluster and nodes."
   type = object({
-    cluster_subnet_ids    = list(string)
-    security_group_ids    = list(string)
-    node_group_subnet_ids = map(list(string))
+    vpc_id                   = string
+    cluster_subnet_ids       = list(string)
+    public_subnet_ids        = list(string)
+    private_subnet_ids       = list(string)
+    interactive_nodes_public = optional(bool, true)
   })
 
   validation {
     condition = (
+      var.networking.vpc_id != "" &&
       length(var.networking.cluster_subnet_ids) > 0 &&
-      length(var.networking.security_group_ids) > 0 &&
-      alltrue([for subnet_ids in values(var.networking.node_group_subnet_ids) : length(subnet_ids) > 0])
+      length(var.networking.public_subnet_ids) > 0 &&
+      length(var.networking.private_subnet_ids) > 0
     )
-    error_message = "Cluster subnet IDs, security group IDs, and every node-group subnet group must be non-empty."
+    error_message = "VPC ID plus cluster, public, and private subnet IDs must be non-empty."
   }
 }
 
-variable "iam_instance_profile_arn" {
-  description = "IAM instance profile ARN used by all PCS compute node groups."
-  type        = string
-}
-
-variable "key_name" {
-  description = "Optional EC2 key pair name added to all launch templates."
+variable "security_group_name" {
+  description = "Optional name for the module-created PCS node security group."
   type        = string
   default     = null
 }
 
-variable "launch_template_settings" {
-  description = "Optional settings per generated launch-template type."
-  type = map(object({
-    associate_public_ip_address          = optional(bool, false)
-    metadata_http_tokens                 = optional(string, "required")
-    metadata_http_put_response_hop_limit = optional(number, 2)
-    tags                                 = optional(map(string), {})
-  }))
-  default = {}
+variable "ingress_cidr_blocks" {
+  description = "CIDR blocks allowed to reach login/API ports on the module-created PCS security group."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
 
 variable "tags" {
   description = "Tags applied to all managed launch templates and instances."
   type        = map(string)
   default     = {}
+}
+
+variable "iam_instance_profile_arn" {
+  description = "Optional existing IAM instance profile ARN. When null, the module creates the PCS role and instance profile."
+  type        = string
+  default     = null
+}
+
+variable "instance_profile_name" {
+  description = "Name suffix for the module-created PCS IAM role and instance profile. The module adds the required AWSPCS prefixes."
+  type        = string
+  default     = null
+}
+
+variable "kms_key_arn" {
+  description = "Optional KMS key ARN to grant decrypt and data-key permissions to the module-created PCS role."
+  type        = string
+  default     = null
+}
+
+variable "additional_policy_jsons" {
+  description = "Additional IAM policy JSON documents attached to the module-created PCS role for project-specific access."
+  type        = list(string)
+  default     = []
 }

@@ -41,3 +41,18 @@ output "queue_ids" {
     key => queue.queue_id
   }
 }
+
+output "iam_instance_profile_arn" {
+  description = "IAM instance profile ARN used by the PCS node groups."
+  value       = local.instance_profile_arn
+}
+
+output "iam_role_arn" {
+  description = "ARN of the module-created PCS IAM role, or null when an existing profile is supplied."
+  value       = local.create_instance_profile ? aws_iam_role.pcs[0].arn : null
+}
+
+output "security_group_ids" {
+  description = "Security group IDs used by the PCS cluster and nodes."
+  value       = local.security_group_ids
+}

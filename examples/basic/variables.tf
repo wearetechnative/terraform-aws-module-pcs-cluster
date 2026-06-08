@@ -2,39 +2,34 @@ variable "aws_region" {
   type = string
 }
 
-variable "cluster" {
+variable "cluster_name" {
+  type = string
+}
+
+variable "config" {
   type = any
-}
-
-variable "amis" {
-  type = map(string)
-}
-
-variable "bootstrap_scripts" {
-  type = map(string)
-}
-
-variable "filesystems" {
-  type    = any
-  default = {}
 }
 
 variable "networking" {
   type = any
 }
 
-variable "iam_instance_profile_arn" {
+variable "instance_profile_name" {
   type = string
 }
 
-variable "key_name" {
-  type    = string
-  default = null
+variable "security_group_name" {
+  type = string
 }
 
-variable "launch_template_settings" {
-  type    = any
-  default = {}
+variable "ingress_cidr_blocks" {
+  type    = list(string)
+  default = ["0.0.0.0/0"]
+}
+
+variable "kms_key_arn" {
+  type    = string
+  default = null
 }
 
 variable "tags" {
