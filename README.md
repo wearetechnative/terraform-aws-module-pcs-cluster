@@ -34,9 +34,9 @@ module "pcs_cluster" {
 
   config = {
     template_efs_id             = "fs-0e0dba1d074fe7715"
-    template_lustre_id          = ""
-    template_lustre_dns         = ""
-    template_lustre_mount_point = ""
+    template_lustre_id          = "fs-02941e69786a1a2cf"
+    template_lustre_dns         = "fs-02941e69786a1a2cf.fsx.eu-north-1.amazonaws.com"
+    template_lustre_mount_point = "abc145672"
 
     template_keypair_name     = "technative"
     template_image_id_compute = "ami-06f84c16c5dafab29"
