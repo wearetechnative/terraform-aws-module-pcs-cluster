@@ -18,8 +18,8 @@ provider "aws" {
   allowed_account_ids = [var.aws_account_id]
 
   assume_role {
-    role_arn     = "arn:aws:iam::${var.aws_account_id}:role/landing_zone_devops_administrator"
-    session_name = "terraform_management_account"
+    role_arn     = "arn:aws:iam::${var.aws_account_id}:role/rolename"
+    session_name = "terraform_pcs"
   }
 
   default_tags {
@@ -38,8 +38,8 @@ provider "awscc" {
   region = "eu-north-1"
 
   assume_role = {
-    role_arn     = "arn:aws:iam::${var.aws_account_id}:role/landing_zone_devops_administrator"
-    session_name = "terraform_management_account"
+    role_arn     = "arn:aws:iam::${var.aws_account_id}:role/rolename"
+    session_name = "terraform_pcs"
   }
 }
 

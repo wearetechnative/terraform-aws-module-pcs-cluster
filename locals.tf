@@ -3,6 +3,7 @@ locals {
   instance_profile_name   = coalesce(var.instance_profile_name, var.cluster_name)
   instance_profile_arn    = local.create_instance_profile ? aws_iam_instance_profile.pcs[0].arn : var.iam_instance_profile_arn
   security_group_ids      = [aws_security_group.pcs_nodes.id]
+  interactive_subnet_ids  = var.networking.interactive_nodes_public ? var.networking.public_subnet_ids : var.networking.private_subnet_ids
 
   bootstrap_context = {
     template_efs_id                = var.config.template_efs_id
@@ -22,13 +23,13 @@ locals {
     login = {
       image_id                    = var.config.template_image_id_login
       template_path               = "${path.module}/templates/bootstrap-loginnode.init.tftpl"
-      associate_public_ip_address = true
+      associate_public_ip_address = var.networking.interactive_nodes_public
       include_instance_profile    = false
     }
     dcv = {
       image_id                    = var.config.template_image_id_dcv
       template_path               = "${path.module}/templates/bootstrap-dcvnodes.init.tftpl"
-      associate_public_ip_address = false
+      associate_public_ip_address = var.networking.interactive_nodes_public
       include_instance_profile    = true
     }
   }
@@ -44,7 +45,7 @@ locals {
           min_instance_count = group.min_instance_count
           max_instance_count = group.max_instance_count
           launch_template    = group.launch_template
-          subnet_ids         = group.launch_template == "dcv" ? var.networking.public_subnet_ids : var.networking.private_subnet_ids
+          subnet_ids         = group.launch_template == "dcv" ? local.interactive_subnet_ids : var.networking.private_subnet_ids
         }
       ]
     ]) : item.key => item
@@ -59,7 +60,7 @@ locals {
       min_instance_count = 1
       max_instance_count = 1
       launch_template    = "login"
-      subnet_ids         = var.networking.public_subnet_ids
+      subnet_ids         = local.interactive_subnet_ids
     }
   }
 

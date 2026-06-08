@@ -54,6 +54,9 @@ module "pcs_cluster" {
     cluster_subnet_ids = [aws_subnet.public_a.id]
     public_subnet_ids  = [aws_subnet.public_a.id, aws_subnet.public_b.id]
     private_subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+
+    # Optional: place login and DCV nodes in private subnets for VPN-only access.
+    # interactive_nodes_public = false
   }
 
   instance_profile_name = "actiflow"
@@ -79,6 +82,11 @@ login bootstrap template.
 By default, the login node group has both its minimum and maximum instance
 count set to `1`. This keeps one login node running continuously, independently
 of queued Slurm jobs and the scaling configuration of compute node groups.
+
+By default, login and DCV nodes use `networking.public_subnet_ids` and receive
+public IPv4 addresses. For VPN-only access, set
+`networking.interactive_nodes_public = false`. Login and DCV nodes will then use
+`networking.private_subnet_ids` and skip public IPv4 assignment.
 
 ## IAM Instance Profile
 
@@ -142,6 +150,10 @@ The templates render these config values:
 Shell variables inside the templates are escaped as `$${VARIABLE}` so Terraform
 leaves them intact while rendering template values such as `${template_efs_id}`.
 
+The built-in bootstrap templates assume an Amazon Linux compatible AMI. They
+expect `cloud-init`, `yum`, and the default `ec2-user` account to be present.
+They are not suitable for Ubuntu or other distributions without modification.
+
 ## Creating PCS AMIs
 
 The module expects three AMI IDs in `config`:
@@ -184,9 +196,17 @@ AWS PCS currently requires a kernel with IPv4 support for local node
 communication, even in IPv6-only networks. The AMI used by each node group must
 be compatible with AWS PCS.
 
-After creating or updating an AMI, test it by launching a node group with a
-small static size, wait for the EC2 instance to complete bootstrap, and confirm
-that the instance details show the expected AMI ID.
+After creating or updating an AMI, test it through Slurm instead of only
+checking the EC2 instance details. Create or update a small node group, wait for
+the login node to complete bootstrap, SSH to the login node, and run:
+
+```bash
+sinfo
+```
+
+The node group should appear in the Slurm cluster output. If `sinfo` cannot
+contact the controller or the nodes do not appear, the AMI or bootstrap process
+is not ready for production use.
 
 ## PCS Cluster Sizes
 
@@ -289,8 +309,9 @@ Minimum Cloud Control actions:
 | `config` | PCS config object containing filesystem IDs, AMIs, login instance type, scheduler version, size, and `cluster_setup`. | yes | |
 | `networking.vpc_id` | VPC ID where the module-created security group is created. | yes | |
 | `networking.cluster_subnet_ids` | Subnets used by the PCS cluster control plane. | yes | |
-| `networking.public_subnet_ids` | Subnets used by login and DCV node groups. | yes | |
+| `networking.public_subnet_ids` | Subnets used by login and DCV node groups when `interactive_nodes_public` is `true`. | yes | |
 | `networking.private_subnet_ids` | Subnets used by compute node groups. | yes | |
+| `networking.interactive_nodes_public` | Whether login and DCV node groups use public subnets and receive public IPv4 addresses. | no | `true` |
 | `security_group_name` | Name for the module-created PCS security group. | no | `${cluster_name}-pcs` |
 | `ingress_cidr_blocks` | CIDRs allowed to reach ports `22` and `8443`. | no | `["0.0.0.0/0"]` |
 | `instance_profile_name` | Suffix for `AWSPCS-role-*` and `AWSPCS-profile-*`. | no | `cluster_name` |

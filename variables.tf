@@ -33,10 +33,11 @@ variable "config" {
 variable "networking" {
   description = "Existing VPC and subnets used by the PCS cluster and nodes."
   type = object({
-    vpc_id             = string
-    cluster_subnet_ids = list(string)
-    public_subnet_ids  = list(string)
-    private_subnet_ids = list(string)
+    vpc_id                   = string
+    cluster_subnet_ids       = list(string)
+    public_subnet_ids        = list(string)
+    private_subnet_ids       = list(string)
+    interactive_nodes_public = optional(bool, true)
   })
 
   validation {
