@@ -28,7 +28,7 @@ Before applying this module, prepare:
 
 ```hcl
 module "pcs_cluster" {
-  source = "git::ssh://git@example.com/terraform-aws-module-pcs-cluster.git?ref=v1.0.0"
+  source = "git@github.com/wearetechnative/terraform-aws-module-pcs-cluster.git"
 
   cluster_name = "prod-pcs"
 
