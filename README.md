@@ -57,6 +57,13 @@ module "pcs_cluster" {
   }
 
   instance_profile_name = "actiflow"
+  security_group_name   = "prod-pcs"
+  ingress_cidr_blocks   = ["203.0.113.0/24"]
+
+  tags = {
+    Project = "Actiflow"
+    Stack   = "pcs"
+  }
 }
 ```
 
@@ -135,6 +142,52 @@ The templates render these config values:
 Shell variables inside the templates are escaped as `$${VARIABLE}` so Terraform
 leaves them intact while rendering template values such as `${template_efs_id}`.
 
+## Creating PCS AMIs
+
+The module expects three AMI IDs in `config`:
+
+| Config value | Used by |
+|---|---|
+| `template_image_id_compute` | queue compute node groups using `launch_template = "compute"` |
+| `template_image_id_login` | the always-running login node group |
+| `template_image_id_dcv` | queue compute node groups using `launch_template = "dcv"` |
+
+These can point to the same AMI or to different AMIs. For example, compute and
+login nodes can usually share an AMI, while DCV nodes often need a separate AMI
+with graphical desktop, DCV, GPU, or visualization packages.
+
+AWS PCS can use sample AMIs for testing, but AWS recommends building your own
+AMIs for production:
+
+- AWS PCS AMI overview:
+  <https://docs.aws.amazon.com/pcs/latest/userguide/working-with_ami.html>
+- Custom AMI tutorial:
+  <https://docs.aws.amazon.com/pcs/latest/userguide/working-with_ami_custom.html>
+- AWS PCS software installers:
+  <https://docs.aws.amazon.com/pcs/latest/userguide/working-with_ami_installers.html>
+
+High-level process:
+
+1. Launch a temporary EC2 instance from a supported operating system.
+2. Install the AWS PCS agent using the AWS-provided installer.
+3. Install a Slurm version compatible with the PCS scheduler version, preferably
+   using the AWS-provided Slurm installer.
+4. Install extra software needed by that node type:
+   - compute: application libraries, MPI/EFA, EFS client, Lustre client
+   - login: user tools, EFS client, Lustre client
+   - DCV: graphical desktop, DCV packages, GPU/NVIDIA/CUDA packages if needed
+5. Create an AMI from the temporary instance.
+6. Use the resulting AMI IDs in `template_image_id_compute`,
+   `template_image_id_login`, and `template_image_id_dcv`.
+
+AWS PCS currently requires a kernel with IPv4 support for local node
+communication, even in IPv6-only networks. The AMI used by each node group must
+be compatible with AWS PCS.
+
+After creating or updating an AMI, test it by launching a node group with a
+small static size, wait for the EC2 instance to complete bootstrap, and confirm
+that the instance details show the expected AMI ID.
+
 ## PCS Cluster Sizes
 
 Choose the cluster size based on both the maximum number of managed instances
@@ -162,6 +215,89 @@ Examples:
 | AWS Cloud Control provider (`hashicorp/awscc`) | >= 1.0.0 |
 
 The caller must configure both providers in the target AWS region.
+
+PCS resources are created with the AWS Cloud Control provider because the AWS
+provider does not currently expose native PCS resources. Configure `aws` and
+`awscc` with the same target account and region.
+
+```hcl
+provider "aws" {
+  region              = "eu-central-1"
+  allowed_account_ids = [var.aws_account_id]
+
+  assume_role {
+    role_arn     = "arn:aws:iam::${var.aws_account_id}:role/landing_zone_devops_administrator"
+    session_name = "terraform_management_account"
+  }
+
+  default_tags {
+    tags = {
+      Company     = "TechnativeBV"
+      IaC_Project = var.project
+      Git_URL     = var.git_url
+      Stack       = "shared"
+    }
+  }
+}
+
+provider "awscc" {
+  region = "eu-central-1"
+
+  assume_role = {
+    role_arn     = "arn:aws:iam::${var.aws_account_id}:role/landing_zone_devops_administrator"
+    session_name = "terraform_management_account"
+  }
+}
+```
+
+The syntax differs between providers: `aws` uses an `assume_role` block, while
+`awscc` uses an `assume_role` object.
+
+## Terraform Deployer Permissions
+
+The IAM principal running Terraform needs permissions for the AWS provider
+resources created by this module: EC2 launch templates, IAM role/profile and
+policies, security groups, and optional KMS grants.
+
+Because PCS resources use `awscc`, the deployer also needs CloudFormation Cloud
+Control permissions. Without these permissions, cluster creation fails with
+`AccessDeniedException` for `cloudformation:CreateResource`.
+
+Minimum Cloud Control actions:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "cloudformation:CreateResource",
+    "cloudformation:GetResource",
+    "cloudformation:GetResourceRequestStatus",
+    "cloudformation:ListResources",
+    "cloudformation:UpdateResource",
+    "cloudformation:DeleteResource",
+    "cloudformation:CancelResourceRequest"
+  ],
+  "Resource": "*"
+}
+```
+
+## Inputs
+
+| Name | Description | Required | Default |
+|---|---|---:|---|
+| `cluster_name` | PCS cluster name. | yes | |
+| `config` | PCS config object containing filesystem IDs, AMIs, login instance type, scheduler version, size, and `cluster_setup`. | yes | |
+| `networking.vpc_id` | VPC ID where the module-created security group is created. | yes | |
+| `networking.cluster_subnet_ids` | Subnets used by the PCS cluster control plane. | yes | |
+| `networking.public_subnet_ids` | Subnets used by login and DCV node groups. | yes | |
+| `networking.private_subnet_ids` | Subnets used by compute node groups. | yes | |
+| `security_group_name` | Name for the module-created PCS security group. | no | `${cluster_name}-pcs` |
+| `ingress_cidr_blocks` | CIDRs allowed to reach ports `22` and `8443`. | no | `["0.0.0.0/0"]` |
+| `instance_profile_name` | Suffix for `AWSPCS-role-*` and `AWSPCS-profile-*`. | no | `cluster_name` |
+| `iam_instance_profile_arn` | Existing instance profile ARN. Supplying this disables module-created IAM. | no | `null` |
+| `kms_key_arn` | Optional KMS key ARN for a grant to the module-created PCS role. | no | `null` |
+| `additional_policy_jsons` | Extra IAM policy JSON documents attached to the module-created PCS role. | no | `[]` |
+| `tags` | Tags applied to module-created resources that support tags. | no | `{}` |
 
 ## Outputs
 
