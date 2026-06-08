@@ -4,9 +4,25 @@ Creates one AWS Parallel Computing Service (PCS) cluster, the compute/login/DCV
 launch templates, a continuously running login node, queue compute node groups,
 and queues.
 
-The module keeps the public input close to the existing project tfvars shape.
-Bootstrap scripts live inside the module as templates; callers only pass the
-filesystem, AMI, scheduler, size, and queue/node-group values.
+Bootstrap scripts live inside the module as templates. To deploy a cluster,
+provide the filesystem IDs, AMI IDs, scheduler version, cluster size,
+networking, and queue/node-group definitions.
+
+## Deployment Checklist
+
+Before applying this module, prepare:
+
+- A VPC with subnets for the PCS control plane, compute nodes, and optionally
+  public login/DCV access.
+- AMIs for compute, login, and DCV nodes that include the AWS PCS agent and a
+  Slurm version compatible with `pcs_scheduler_version`.
+- An EC2 key pair if SSH access is required.
+- Trusted CIDR ranges for `ingress_cidr_blocks`; for VPN deployments, use the
+  VPN client or VPC CIDR instead of `0.0.0.0/0`.
+- Outbound network access from private nodes through NAT or VPC endpoints for
+  bootstrap, package repositories, SSM, and required AWS APIs.
+- Optional EFS or FSx for Lustre file system IDs if the bootstrap templates
+  should mount shared storage.
 
 ## Usage
 
@@ -59,16 +75,40 @@ module "pcs_cluster" {
     # interactive_nodes_public = false
   }
 
-  instance_profile_name = "actiflow"
+  instance_profile_name = "prod"
   security_group_name   = "prod-pcs"
   ingress_cidr_blocks   = ["203.0.113.0/24"]
 
   tags = {
-    Project = "Actiflow"
+    Project = "Example"
     Stack   = "pcs"
   }
 }
 ```
+
+See `examples/basic/example.tfvars.json` for a complete JSON tfvars example.
+
+## Networking
+
+The module separates node placement into three subnet groups:
+
+| Setting | Used for |
+|---|---|
+| `networking.cluster_subnet_ids` | PCS cluster control plane |
+| `networking.private_subnet_ids` | compute node groups and private interactive nodes |
+| `networking.public_subnet_ids` | login and DCV node groups when public access is enabled |
+
+Set `networking.interactive_nodes_public` to choose how login and DCV nodes are
+placed:
+
+| Value | Login/DCV subnets | Public IPv4 addresses |
+|---|---|---|
+| `true` | `public_subnet_ids` | yes |
+| `false` | `private_subnet_ids` | no |
+
+Use `interactive_nodes_public = false` when users reach the cluster through a
+VPN, Direct Connect, peering, or another private network path. In that mode,
+`public_subnet_ids` can be omitted or left empty.
 
 `cluster_setup` defines only Slurm queue compute node groups. The login node is
 created separately from `login_node_instance_type`.
@@ -82,11 +122,6 @@ login bootstrap template.
 By default, the login node group has both its minimum and maximum instance
 count set to `1`. This keeps one login node running continuously, independently
 of queued Slurm jobs and the scaling configuration of compute node groups.
-
-By default, login and DCV nodes use `networking.public_subnet_ids` and receive
-public IPv4 addresses. For VPN-only access, set
-`networking.interactive_nodes_public = false`. Login and DCV nodes will then use
-`networking.private_subnet_ids` and skip public IPv4 assignment.
 
 ## IAM Instance Profile
 
@@ -112,7 +147,7 @@ disable module-managed IAM and use the existing profile.
 The module creates one PCS node security group in `networking.vpc_id` and uses
 it for the cluster and all launch templates.
 
-The default rules match the current PCS baseline:
+The default rules are:
 
 | Direction | Port | Source |
 |---|---:|---|
@@ -124,8 +159,8 @@ The default rules match the current PCS baseline:
 | Ingress | `2049` | self |
 | Ingress | `6817-6818` | self |
 
-`ingress_cidr_blocks` defaults to `["0.0.0.0/0"]` to match the existing stack,
-but future projects should usually restrict it.
+`ingress_cidr_blocks` defaults to `["0.0.0.0/0"]` for initial accessibility.
+Production usage should usually restrict it to trusted networks.
 
 ## Built-In Bootstrap Templates
 
@@ -278,8 +313,8 @@ provider "awscc" {
 | `config` | PCS config object containing filesystem IDs, AMIs, login instance type, scheduler version, size, and `cluster_setup`. | yes | |
 | `networking.vpc_id` | VPC ID where the module-created security group is created. | yes | |
 | `networking.cluster_subnet_ids` | Subnets used by the PCS cluster control plane. | yes | |
-| `networking.public_subnet_ids` | Subnets used by login and DCV node groups when `interactive_nodes_public` is `true`. | yes | |
 | `networking.private_subnet_ids` | Subnets used by compute node groups. | yes | |
+| `networking.public_subnet_ids` | Subnets used by login and DCV node groups when `interactive_nodes_public` is `true`. | conditional | `[]` |
 | `networking.interactive_nodes_public` | Whether login and DCV node groups use public subnets and receive public IPv4 addresses. | no | `true` |
 | `security_group_name` | Name for the module-created PCS security group. | no | `${cluster_name}-pcs` |
 | `ingress_cidr_blocks` | CIDRs allowed to reach ports `22` and `8443`. | no | `["0.0.0.0/0"]` |

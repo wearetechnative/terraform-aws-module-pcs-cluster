@@ -35,7 +35,7 @@ variable "networking" {
   type = object({
     vpc_id                   = string
     cluster_subnet_ids       = list(string)
-    public_subnet_ids        = list(string)
+    public_subnet_ids        = optional(list(string), [])
     private_subnet_ids       = list(string)
     interactive_nodes_public = optional(bool, true)
   })
@@ -44,10 +44,13 @@ variable "networking" {
     condition = (
       var.networking.vpc_id != "" &&
       length(var.networking.cluster_subnet_ids) > 0 &&
-      length(var.networking.public_subnet_ids) > 0 &&
-      length(var.networking.private_subnet_ids) > 0
+      length(var.networking.private_subnet_ids) > 0 &&
+      (
+        !var.networking.interactive_nodes_public ||
+        length(var.networking.public_subnet_ids) > 0
+      )
     )
-    error_message = "VPC ID plus cluster, public, and private subnet IDs must be non-empty."
+    error_message = "VPC ID plus cluster and private subnet IDs must be non-empty. public_subnet_ids must be non-empty when interactive_nodes_public is true."
   }
 }
 
