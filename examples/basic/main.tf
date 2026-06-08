@@ -24,13 +24,8 @@ provider "awscc" {
 module "pcs_cluster" {
   source = "../.."
 
-  cluster                  = var.cluster
-  amis                     = var.amis
-  bootstrap_scripts        = var.bootstrap_scripts
-  filesystems              = var.filesystems
-  networking               = var.networking
-  iam_instance_profile_arn = var.iam_instance_profile_arn
-  key_name                 = var.key_name
-  launch_template_settings = var.launch_template_settings
-  tags                     = var.tags
+  cluster_name = var.cluster_name
+  config       = var.config
+  networking   = var.networking
+  tags         = var.tags
 }

@@ -1,0 +1,78 @@
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="==MYBOUNDARY=="
+
+--==MYBOUNDARY==
+Content-Type: text/cloud-config; charset="us-ascii"
+MIME-Version: 1.0
+
+packages:
+- amazon-efs-utils
+- python3-botocore
+- jq
+- acl
+
+write_files:
+  - path: /tmp/bootstrap.sh
+    permissions: '0744'
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      LOG_FILE="/var/log/amazon/pcs/bootstrap.log"
+      mkdir -p "$(dirname "$${LOG_FILE}")"
+
+      TOKEN="$(curl -sS -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")"
+      INSTANCE_ID="$(curl -sS -H "X-aws-ec2-metadata-token: $${TOKEN}" http://169.254.169.254/latest/meta-data/instance-id)"
+      AZ="$(curl -sS -H "X-aws-ec2-metadata-token: $${TOKEN}" http://169.254.169.254/latest/meta-data/placement/availability-zone)"
+      REGION="$${AZ::-1}"
+
+      export AWS_DEFAULT_REGION="$${REGION}"
+      export AWS_REGION="$${REGION}"
+      export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+      ATTEMPTS=12
+      for attempt in $(seq 1 "$${ATTEMPTS}"); do
+        if aws ec2 create-tags --no-cli-pager --resources "$${INSTANCE_ID}" --tags Key=Name,Value=Login_PCS; then
+          TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "$${TS} pcs-login-tag success attempt $${attempt}" >> "$${LOG_FILE}"
+          exit 0
+        fi
+        sleep 10
+      done
+
+      TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+      echo "$${TS} pcs-login-tag failed after $${ATTEMPTS} attempts" >> "$${LOG_FILE}"
+      
+  - path: /tmp/fix-lustre-permissions.sh
+    permissions: '0744'
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      chmod 1777 /fsx
+
+      jq -r '.[]' <<< '${template_lustre_writable_paths}' | while IFS= read -r relative_path; do
+        absolute_path="/fsx$${relative_path}"
+
+        install -d -o ec2-user -g ec2-user -m 2775 "$${absolute_path}"
+        chown ec2-user:ec2-user "$${absolute_path}"
+        chmod 2775 "$${absolute_path}"
+        if command -v setfacl >/dev/null 2>&1; then
+          setfacl -m u::rwx,g::rwx,o::rx,d:u::rwx,d:g::rwx,d:o::rx "$${absolute_path}" || true
+        fi
+      done
+
+runcmd:
+# Mount EFS filesystem as /home
+- if [ -n "${template_efs_id}" ]; then mkdir -p /tmp/home; rsync -a /home/ /tmp/home; echo "${template_efs_id}:/ /home efs tls,_netdev" >> /etc/fstab; mount -a -t efs defaults; rsync -a --ignore-existing /tmp/home/ /home; rm -rf /tmp/home/; fi
+
+# Mount FSx for Lustre as /fsx when provided
+- if [ -n "${template_lustre_dns}" ] && [ -n "${template_lustre_mount_point}" ]; then mkdir -p /fsx; chmod a+rwx /fsx; mount -t lustre ${template_lustre_dns}@tcp:/${template_lustre_mount_point} /fsx; chmod 777 /fsx; /tmp/fix-lustre-permissions.sh; fi
+
+## Tagging instances (to name instances in the console)
+- /tmp/bootstrap.sh
+
+
+--==MYBOUNDARY==--
