@@ -4,7 +4,7 @@ variable "cluster_name" {
 }
 
 variable "config" {
-  description = "PCS cluster configuration matching the project tfvars shape."
+  description = "PCS cluster configuration."
   type = object({
     template_efs_id                = optional(string, "")
     template_lustre_id             = optional(string, "")
