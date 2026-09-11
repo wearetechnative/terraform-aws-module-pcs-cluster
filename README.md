@@ -1,4 +1,4 @@
-# AWS PCS cluster Terraform module
+# AWS PCS cluster Terraform module ![](https://img.shields.io/github/actions/workflow/status/wearetechnative/terraform-aws-module-pcs-cluster/tflint.yaml?branch=main&style=plastic)
 
 Creates one AWS Parallel Computing Service (PCS) cluster, the compute/login/DCV
 launch templates, a continuously running login node, queue compute node groups,
