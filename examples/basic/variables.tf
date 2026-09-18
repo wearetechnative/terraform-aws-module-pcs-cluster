@@ -36,3 +36,21 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "aws_account_id" {
+  description = "Account this example deploys into. Guards the provider against applying to the wrong account."
+  type        = string
+  default     = "000000000000"
+}
+
+variable "project" {
+  description = "Value for the IaC_Project default tag."
+  type        = string
+  default     = "pcs-cluster-example"
+}
+
+variable "git_url" {
+  description = "Value for the Git_URL default tag, pointing at the repository that owns this stack."
+  type        = string
+  default     = "https://github.com/wearetechnative/terraform-aws-module-pcs-cluster"
+}

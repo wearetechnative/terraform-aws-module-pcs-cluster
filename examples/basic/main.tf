@@ -14,7 +14,7 @@ terraform {
 }
 
 provider "aws" {
-  region              = "eu-north-1"
+  region              = var.aws_region
   allowed_account_ids = [var.aws_account_id]
 
   assume_role {
@@ -44,7 +44,7 @@ provider "awscc" {
 }
 
 module "pcs_cluster" {
-  source = "git::ssh://git@github.com/wearetechnative/terraform-aws-module-pcs-cluster.git?ref=e57db449189948bcdc16219ec700caa8ac5f8494"
+  source = "../../"
 
   cluster_name = var.cluster_name
 
