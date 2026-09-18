@@ -61,9 +61,8 @@ variable "security_group_name" {
 }
 
 variable "ingress_cidr_blocks" {
-  description = "CIDR blocks allowed to reach login/API ports on the module-created PCS security group."
+  description = "CIDR blocks allowed to reach login/API ports on the module-created PCS security group. Required: the previous default of 0.0.0.0/0 exposed SSH to the whole internet."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
 }
 
 variable "tags" {
